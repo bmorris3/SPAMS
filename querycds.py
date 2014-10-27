@@ -3,6 +3,8 @@
 querycds, an object-oriented, pure Python query tool for
 SIMBAD and Vizier by Brett Morris (UW). 
 
+Welcome to the project Ada and Doug!
+
 Notes
 -----
 Vizier queries based in part on QUERYVIZIER.pro (IDL), available at: 
