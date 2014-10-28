@@ -3,8 +3,6 @@
 querycds, an object-oriented, pure Python query tool for
 SIMBAD and Vizier by Brett Morris (UW). 
 
-Welcome to the project Ada and Doug!
-
 Notes
 -----
 Vizier queries based in part on QUERYVIZIER.pro (IDL), available at: 
@@ -101,6 +99,7 @@ def getmirrorspeeds(timeout=2):
 #fastestmirrors = getmirrorspeeds()
 #usemirror(**fastestmirrors)
 usemirror(simbad='u-strasbg', vizier='u-strasbg')
+
 def txt2url(string):
     '''
     Take a string of text and replace some special characters
@@ -167,7 +166,7 @@ class star:
         self.getRADec()
         self.getFluxes()
         self.getSpectralType()
-        #self.query2MASS_target(baseurl=vizierbaseurl)
+        self.query2MASS_target()
         #self.query2MASS_comparisons(baseurl=vizierbaseurl)
         #self.querySDSS_comparisons()
 
@@ -599,4 +598,28 @@ class star:
             for name, mag in zip(self.dictionary['comp_'+band+'_sources'], self.dictionary['comp_'+band+'_mags']):
                 printstring += name+'    '+str(mag)+'\n'
         return printstring
+        
+    def SDSScomps_nearest(self, band, threshold):
+        '''
+        Return the comparisons in `band` within the nearest `threshold` magnitudes
+        
+        Parameters
+        ----------
+        band : str
+            The name of the band to query
+            
+        threshold : float
+            Number of magnitudes to return comparisons from
+        '''
+        targetkey = 'SDSS_%s' % band
+        compkey = 'comp_%s' % band
+        nearestdict = {}
+        for key in self.dictionary[compkey]:
+            if abs(self.dictionary[compkey][key] - self.dictionary[targetkey]) <= threshold:
+                nearestdict[key] = self.dictionary[compkey][key]
+        return nearestdict
+        
+        
+        
+        
         
