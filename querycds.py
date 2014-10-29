@@ -599,7 +599,7 @@ class star:
                 printstring += name+'    '+str(mag)+'\n'
         return printstring
         
-    def SDSScomps_nearest(self, band, threshold):
+    def SDSScomps_nearest(self, band, threshold, sledgehammer=False):
         '''
         Return the comparisons in `band` within the nearest `threshold` magnitudes
         
@@ -610,9 +610,22 @@ class star:
             
         threshold : float
             Number of magnitudes to return comparisons from
+
+        sledgehammer : bool (optional)
+            If True will return an empty dictionary if no SDSS data are available, 
+            if False will raise an error if no SDSS data are available.
         '''
         targetkey = 'SDSS_%s' % band
         compkey = 'comp_%s' % band
+
+        if sledgehammer:
+            if self.dictionary.get(targetkey, None) is None or self.dictionary.get(compkey, None) is None:
+                return {}
+        else:
+            if self.dictionary.get(targetkey, None) is None: 
+                raise ValueError('Target mags from SDSS not retrieved. Use querycds.querySDSS_target() first.')
+            elif self.dictionary.get(compkey, None) is None: 
+                raise ValueError('Comparison star mags from SDSS not retrieved. Use querycds.querySDSS_comparisons() first.')
         nearestdict = {}
         for key in self.dictionary[compkey]:
             if abs(self.dictionary[compkey][key] - self.dictionary[targetkey]) <= threshold:
