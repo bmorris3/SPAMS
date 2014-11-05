@@ -39,7 +39,7 @@ def usemirror(simbad='cfa', vizier='cadc'):
     else:
         raise ValueError('Vizier mirror must be either "cfa", "u-strasbg", or "cadc"')
 
-def getmirrorspeeds(timeout=2):
+def getmirrorspeeds(timeoutduration=2):
     '''
     Check how long it takes to access each mirror, return the name of the mirror
     with the fastest response.
@@ -56,11 +56,11 @@ def getmirrorspeeds(timeout=2):
         print 'Pinging mirror: %s' % mirror
         try:
             starttime = time.time()
-            txt = urlopen('%s%s&submit=SIMBAD+search' % (baseurl, star), timeout=timeout)
+            txt = urlopen('%s%s&submit=SIMBAD+search' % (baseurl, star), timeout=timeoutduration)
             endtime = time.time()
             elapsedtime = endtime-starttime
         except urllib2.URLError:
-            elapsedtime = timeout
+            elapsedtime = timeoutduration
         pingtimes.append(elapsedtime)
     fastestSIMBADmirror = sorted(zip(pingtimes, mirrors))[0][1]
     print 'Fastest responding SIMBAD mirror: %s' % fastestSIMBADmirror
@@ -83,11 +83,11 @@ def getmirrorspeeds(timeout=2):
             txt = urlopen(baseurl + "asu-tsv/?" + \
                      urllib.urlencode({'-source':catalog, \
                      '-c':identifier, '-c.rm':"%s,%s" % (radiusMin,radiusMax),\
-                     '-out.max':'unlimited'}), timeout=timeout)
+                     '-out.max':'unlimited'}), timeout=timeoutduration)
             endtime = time.time()
             elapsedtime = endtime-starttime
         except urllib2.URLError:
-            elapsedtime = timeout
+            elapsedtime = timeoutduration
         pingtimes.append(elapsedtime)
     fastestViziermirror = sorted(zip(pingtimes, mirrors))[0][1]
     print 'Fastest responding Vizier mirror: %s' % fastestViziermirror
@@ -147,6 +147,12 @@ def checksimbadforentry(identifier2MASS,SIMBADbaseurl=SIMBADbaseurl):
     else: 
         return None
 
+def string2float(string):
+    if '(~)' in string:
+        return 0.0
+    else: 
+        return float(string)
+
 class star:
     def __init__(self,identifier,SIMBADbaseurl=SIMBADbaseurl, vizierbaseurl=vizierbaseurl):
         '''
@@ -166,7 +172,7 @@ class star:
         self.getRADec()
         self.getFluxes()
         self.getSpectralType()
-        self.query2MASS_target()
+        #self.query2MASS_target()
         #self.query2MASS_comparisons(baseurl=vizierbaseurl)
         #self.querySDSS_comparisons()
 
@@ -244,7 +250,7 @@ class star:
                 if raw_coord_str[0] != ' No Coord.':
                     ## Raw coordinate string has the RA and DEC separated by a double space
                     self.dictionary['RA_STRING'] = raw_coord_str[0].strip()
-                    self.dictionary['RA_LIST'] = map(float, \
+                    self.dictionary['RA_LIST'] = map(string2float, \
                                            self.dictionary['RA_STRING'].split(' '))
     
                     ## Raw coordinate string has the DEC with some extra stuff on the end,
@@ -252,7 +258,7 @@ class star:
                     ##  values, which are (deg, min, sec)
                     self.dictionary['DEC_STRING'] =  ' '.join(
                                            raw_coord_str[1].split(' ')[:3]).strip()
-                    self.dictionary['DEC_LIST'] = map(float, \
+                    self.dictionary['DEC_LIST'] = map(string2float, \
                           self.dictionary['DEC_STRING'].replace('+','').split(' '))
 
                 ## If SIMBAD does not have coordinates:
