@@ -177,17 +177,21 @@ class star:
         #self.querySDSS_comparisons()
 
     def __str__(self):
-        allkeys = self.dictionary.keys()
-        longestkey = max([len(key) for key in allkeys]) + 2
+        longestkey = max([len(key) for key in self.dictionary.keys()]) + 1
+        longestvalue = max([len(str(value)) for key, value in zip(self.dictionary.keys(), self.dictionary.values()) if 'comp' not in key]) + 1
         string = ''
-        string += '{0:<{fill}s}{1:>{fill}s}\n'.format('KEYS', 'VALUES', fill=longestkey)
-        string += '{0:<{fill}s}{1:>{fill}s}\n'.format('----', '------', fill=longestkey)
+        string += '{0:<{keyfill}s}{1:>{valuefill}s}\n'.format('KEYS', 'VALUES', keyfill=longestkey, valuefill=longestvalue)
+        string += '{0:<{keyfill}s}{1:>{valuefill}s}\n'.format('----', '------', keyfill=longestkey, valuefill=longestvalue)
 
         for key in self.dictionary:
-            if type(self.dictionary[key]) == str:
-                string += '{0:<{fill}s}{1:>{fill}s}\n'.format(key, self.dictionary[key], fill=longestkey)
+            if 'comp' in key:
+                string += '{0:<{keyfill}s}{1:>{valuefill}s}\n'.format(key, '...', keyfill=longestkey, valuefill=longestvalue)                
+            elif type(self.dictionary[key]) == str or type(self.dictionary[key]) == list:
+                string += '{0:<{keyfill}s}{1:>{valuefill}s}\n'.format(key, self.dictionary[key], keyfill=longestkey, valuefill=longestvalue)
             elif type(self.dictionary[key]) == float:
-                string += '{0:<{fill}s}{1:>{fill}f}\n'.format(key, self.dictionary[key], fill=longestkey)
+                string += '{0:<{keyfill}s}{1:>{valuefill}f}\n'.format(key, self.dictionary[key], keyfill=longestkey, valuefill=longestvalue)
+            elif type(self.dictionary[key]) == bool:
+                string += '{0:<{keyfill}s}{1:>{valuefill}s}\n'.format(key, str(self.dictionary[key]), keyfill=longestkey, valuefill=longestvalue)
         return string
 
     def querySimbad(self,identifier,baseurl=SIMBADbaseurl,format='&output.format=ASCII'):
