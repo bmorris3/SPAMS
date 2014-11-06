@@ -176,6 +176,20 @@ class star:
         #self.query2MASS_comparisons(baseurl=vizierbaseurl)
         #self.querySDSS_comparisons()
 
+    def __str__(self):
+        string = ''
+        allkeys = self.dictionary.keys()
+        longestkey = max([len(key) for key in allkeys]) + 3
+        string += '{0:<{fill}s}{1:>{fill}s}\n'.format('KEYS', 'VALUES', fill=longestkey)
+        string += '{0:<{fill}s}{1:>{fill}s}\n'.format('----', '------', fill=longestkey)
+
+        for key in self.dictionary:
+            if type(self.dictionary[key]) == str:
+                string += '{0:<{fill}s}{1:>{fill}s}\n'.format(key, self.dictionary[key], fill=longestkey)
+            elif type(self.dictionary[key]) == float:
+                string += '{0:<{fill}s}{1:>{fill}f}\n'.format(key, self.dictionary[key], fill=longestkey)
+        return string
+
     def querySimbad(self,identifier,baseurl=SIMBADbaseurl,format='&output.format=ASCII'):
         '''
         Query Simbad for `identifier`, save the output data in a dictionary
@@ -473,6 +487,7 @@ class star:
         ## If data were found...
         last_data_row = len(rawViz.splitlines()[i])-2
         if data_row != 0:
+            self.dictionary['inSDSS'] = True
             first_data_row = len(rawViz.splitlines())
             for i in range(len(rawViz.splitlines())):
                 if rawViz.splitlines()[i].startswith('mode'):
@@ -506,6 +521,8 @@ class star:
                 #self.dictionary['SDSS_'+band_str+'_sources'] = brightest_comps_sources
                 #for name, mag in zip(brightest_comps_sources, brightest_comps_mags):
                 #    self.dictionary['comp_'+band_str][name] = mag
+        else:
+             self.dictionary['inSDSS'] = False
 
     def querySDSS_comparisons(self,catalog='SDSS-DR9',baseurl=vizierbaseurl,radiusMin=0.01,radiusMax=6,Ncomps=5):
         '''
