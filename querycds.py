@@ -177,9 +177,9 @@ class star:
         #self.querySDSS_comparisons()
 
     def __str__(self):
-        string = ''
         allkeys = self.dictionary.keys()
-        longestkey = max([len(key) for key in allkeys]) + 3
+        longestkey = max([len(key) for key in allkeys]) + 2
+        string = ''
         string += '{0:<{fill}s}{1:>{fill}s}\n'.format('KEYS', 'VALUES', fill=longestkey)
         string += '{0:<{fill}s}{1:>{fill}s}\n'.format('----', '------', fill=longestkey)
 
