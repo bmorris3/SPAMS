@@ -154,7 +154,7 @@ def string2float(string):
         return float(string)
 
 class star:
-    def __init__(self,identifier,SIMBADbaseurl=SIMBADbaseurl, vizierbaseurl=vizierbaseurl):
+    def __init__(self,identifier,SIMBADbaseurl=SIMBADbaseurl, vizierbaseurl=vizierbaseurl, manualdict=None):
         '''
         Initialize a SIMAD query object. Give an identifier which SIMBAD
         can resolve. Results may be misleading if the star is a member of a binary.
@@ -167,11 +167,27 @@ class star:
         closest_SIMBADmirror : string
             Name the closest SIMBAD mirror to you, either 'cfa' or 'u-strasbg'
         '''
-        self.dictionary = {}
-        self.querySimbad(identifier,baseurl=SIMBADbaseurl)
-        self.getRADec()
-        self.getFluxes()
-        self.getSpectralType()
+        if manualdict is None:
+            self.dictionary = {}
+            self.querySimbad(identifier,baseurl=SIMBADbaseurl)
+            self.getRADec()
+            self.getFluxes()
+            self.getSpectralType()
+        else:
+            if '+' in identifier:
+                idRA, idDec = identifier.split('+')
+                idDec = '+'+idDec
+            elif '-' in identifier:     
+                idRA, idDec = identifier.split('-')
+                idDec = '-'+idDec
+            ralist = [idRA[0:2], idRA[2:4], idRA[4:9]]
+            declist = [idDec[0:3], idDec[3:5], idDec[5:10]]
+            RA_LIST = map(float, ralist)
+            DEC_LIST = map(float, declist)
+            RA_STRING = ' '.join(ralist)
+            DEC_STRING = ' '.join(declist)
+
+            self.dictionary = {'RA_LIST':RA_LIST, 'DEC_LIST':DEC_LIST, 'RA_STRING':RA_STRING, 'DEC_STRING':DEC_STRING, 'ID':identifier}
         #self.query2MASS_target()
         #self.query2MASS_comparisons(baseurl=vizierbaseurl)
         #self.querySDSS_comparisons()
@@ -477,11 +493,11 @@ class star:
         '''
         #import ephem
         identifier = self.dictionary['ID']
-        
+        #catalog = 'V/139/sdss9'
         searchURL = baseurl + "asu-tsv/?" + \
                      urllib.urlencode({'-source':catalog, \
                      '-c':identifier, '-c.rm':"%s,%s" % (radiusMin,radiusMax),\
-                     '-out.max':'unlimited'})
+                     '-out.max':'unlimited', '-c.eq':'J2000'})
         rawViz = urlopen(searchURL).read()
         ## Look to see if data were retrieved 
         data_row = 0
@@ -564,7 +580,7 @@ class star:
         searchURL = baseurl + "asu-tsv/?" + \
                      urllib.urlencode({'-source':catalog, \
                      '-c':identifier, '-c.rm':"%s,%s" % (radiusMin,radiusMax),\
-                     '-out.max':'unlimited'})
+                     '-out.max':'unlimited', '-c.eq':'J2000'})
         rawViz = urlopen(searchURL).read()
 
         ## Look to see if data were retrieved 
