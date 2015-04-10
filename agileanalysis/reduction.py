@@ -29,8 +29,8 @@ for line in regionsfile:
         #starnames.append('comp'+str(counter))
         counter += 1
 
-makemasterdark = False
-makemasterflat = False
+makemasterdark = True
+makemasterflat = True
 if makemasterdark:
     #darkpaths = glob('/local/tmp/AGILE/D27apr2012M-4x4-10*.fits')
     darkpaths = ['/astro/store/scratch/tmp/bmmorris/APO/UT150117/dark-sdss08.{0:04d}.fits'.format(i) 
@@ -83,7 +83,7 @@ expdur = np.zeros(len(images))
 means = np.zeros((len(images), len(apertureradii)))
 medians = np.zeros((len(images), len(apertureradii)))
 
-trackplots = False# True
+trackplots = False
 
 for i in range(len(images)):
     print "%d of %d" % (i+1, len(images))
@@ -257,6 +257,7 @@ for j, ap in enumerate(apertureradii):
     correctedlc_err = lc_err/amtrend(bestp, times)
 
 
+
     # Make lc out of just comp stars
     comp0 = fluxes[:,1, j]
     comp1 = fluxes[:,2, j]
@@ -271,6 +272,8 @@ for j, ap in enumerate(apertureradii):
     #correctedcomplc_err = complc_err/amtrend(bestp, times)
 
     stds[j] = np.std(correctedcomplc)
+    
+
 fig, ax = plt.subplots(1)
 ax.errorbar(times, lc, yerr=lc_err, fmt='.', color='k')
 ax.plot(times, amtrend(bestp, times), color='r')
@@ -282,6 +285,9 @@ import scipy.fftpack
 fig, ax = plt.subplots(2, 2, figsize=(14,14))
 mininttime = int(np.min(times))
 legendprops = {'numpoints':1, 'loc':'lower center'}
+
+np.savetxt("lcexperiments",correctedlc)
+np.savetxt("timesexperiments",times-mininttime)
 
 ax[0, 0].plot(times - mininttime, target, '.', label='SDSS 08')
 ax[0, 0].plot(times - mininttime, compStars[:,0], '.', label='Comp 1')
