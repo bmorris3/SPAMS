@@ -6,6 +6,7 @@ Created on Fri Feb 13 15:33:02 2015
 """
 import numpy as np
 from matplotlib import pyplot as plt
+from mpl_toolkits.mplot3d import axes3d
 from scipy.optimize import leastsq
 fluxes = np.loadtxt("../agileanalysis/lcexperiments")
 times2 = np.loadtxt("../agileanalysis/timesexperiments")
@@ -35,10 +36,10 @@ def lc(t,RpRs,aRs,P,i,t0):
     duration=P/(np.pi*aRs)*np.sqrt(1-b**2)
     depth=(RpRs)**2
     return transit(t,depth,duration,t0,P)
-P=3
+P=.5
 inclination=90
 RpRs_steps=np.linspace(0,1,10)
-aRs_steps=np.linspace(1,10,10)
+aRs_steps=np.linspace(1,100,10)
 chisquared=np.zeros((len(RpRs_steps),len(aRs_steps),len(times2)))
 for i,RpRs_i in enumerate(RpRs_steps):
     for j,aRs_i in enumerate(aRs_steps):
@@ -46,3 +47,17 @@ for i,RpRs_i in enumerate(RpRs_steps):
             model=lc(times2,RpRs_i,aRs_i,P,inclination,t_i)
             chi2=np.sum((fluxes-model)**2)
             chisquared[i,j,k]=chi2
+
+
+def makeplot(i):
+    fig = plt.figure()
+    sheet = chisquared[:, :, i]
+    ax = fig.add_subplot(111, projection='3d')
+    XX, YY = np.meshgrid(RpRs_steps, aRs_steps)
+    #ax.plot_surface(RpRs_steps, aRs_steps,sheet, rstride=1, cstride=1)
+    ax.plot_surface(XX, YY, np.log(sheet), rstride=1, cstride=1)
+    
+    plt.show()
+
+
+makeplot()
