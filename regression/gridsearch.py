@@ -58,6 +58,12 @@ def makeplot(i):
     ax.plot_surface(XX, YY, np.log(sheet), rstride=1, cstride=1)
     
     plt.show()
-
-
-makeplot()
+bestRpRsarray=[]
+for k,t_i in enumerate(times2):
+    chisquared_sheet= chisquared[:,:,k]
+    minindex= chisquared_sheet==np.min(chisquared_sheet)
+    bestRpRs= RpRs_steps[np.sum(minindex, axis=1).astype(bool)][0]
+    bestRpRsarray.append(bestRpRs)
+plt.plot(times2,bestRpRsarray)
+plt.plot(times2,fluxes,'.')
+plt.show()
