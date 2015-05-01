@@ -319,6 +319,8 @@ freqs = scipy.fftpack.fftfreq(correctedlc.size, dt)
 fig.subplots_adjust(hspace=0.3)
 fig.savefig('quicklc.pdf', bbox_inches='tight')
 
+np.savetxt('SDSS082346.00+201557.13.txt',np.vstack([times, correctedlc,correctedlc_err]).T, header='JD Flux Error')
+
 from scipy.ndimage import filters
 fig, ax = plt.subplots(1, figsize=(14,10))
 ax.errorbar(times - mininttime, correctedlc, yerr=correctedlc_err, 
