@@ -6,9 +6,9 @@ Created on Fri Feb 13 15:33:02 2015
 """
 import numpy as np
 from matplotlib import pyplot as plt
-
-fluxes = np.loadtxt("fluxes_20150213.txt")
-times2 = np.loadtxt("times_20150213.txt")
+from scipy.optimize import leastsq
+fluxes = np.loadtxt("lcexperiments")
+times2 = np.loadtxt("timesexperiments")
 times=np.linspace(0,1,1e4)
 def transit(t, depth, duration,midtransit,period,F0=1):
     transitflux=np.ones_like(t) #allocates an array of 1's
@@ -35,8 +35,13 @@ def lc(RpRs,aRs,P,i,t0,t):
     duration=P/(np.pi*aRs)*np.sqrt(1-b**2)
     depth=(RpRs)**2
     return transit(t,depth,duration,t0,P)
-        
+
+###
+lcguess=(0,1,2,3,4,5)
+betterlc=leastsq(lc(1,1),lcguess,args=(times2))[0]           
+###
 
 plt.plot(times2,model)
 plt.plot(times2,fluxes)
 plt.show()
+
