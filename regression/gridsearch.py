@@ -74,8 +74,26 @@ def gridsearch(d):
 
     return times2, fluxes, bestRpRsarray
     
+dtimes,dfluxes,dbestRpRsarray=gridsearch(d)
+etimes,efluxes,ebestRpRsarray=gridsearch(e)
+ftimes,ffluxes,fbestRpRsarray=gridsearch(f)
 
-times2,fluxes,bestRpRsarray = gridsearch(d)
-plt.plot(times2,bestRpRsarray)
-plt.plot(times2,fluxes,'.')
+#plt.plot(times2,bestRpRsarray)
+#plt.plot(times2,fluxes,'.')
+f, (ax1, ax2, ax3)= plt.subplots(3,1)
+ax1.plot(dtimes, dbestRpRsarray)
+ax1.plot(dtimes, dfluxes,'.')
+ax1.set_title('SDSS115219.99+024814.4')
+
+
+ax2.plot(etimes, ebestRpRsarray)
+ax2.plot(etimes, efluxes,'.')
+ax2.set_title('SDSS082346.00+201557.13')
+
+ax2.set_ylabel('normalized flux')
+ax3.plot(ftimes, fbestRpRsarray)
+ax3.plot(ftimes, ffluxes,'.')
+ax3.set_title('SDSS160401.31+083109.01')
+ax3.set_xlabel('time')
+
 plt.show()
