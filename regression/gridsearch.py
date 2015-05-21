@@ -74,8 +74,41 @@ def gridsearch(d):
 
     return times2, fluxes, bestRpRsarray
     
+dtimes,dfluxes,dbestRpRsarray=gridsearch(d)
+etimes,efluxes,ebestRpRsarray=gridsearch(e)
+ftimes,ffluxes,fbestRpRsarray=gridsearch(f)
 
-times2,fluxes,bestRpRsarray = gridsearch(d)
-plt.plot(times2,bestRpRsarray)
-plt.plot(times2,fluxes,'.')
-plt.show()
+#plt.plot(times2,bestRpRsarray)
+#plt.plot(times2,fluxes,'.')
+"""
+f, (ax1, ax2, ax3)= plt.subplots(3,1)
+
+ax1.plot(dtimes, dbestRpRsarray,'r',label="Size of Potential Planet")
+ax1.plot(dtimes, dfluxes,'b.',label="Light Curve")
+ax1.set_title('SDSS115219.99+024814.4')
+#plt.legend(loc="upper left", shadow=True, fancybox=True)
+#ax1.get_legend()
+#ax1.plt.grid(True)
+
+ax2.plot(etimes, ebestRpRsarray,'r')
+ax2.plot(etimes, efluxes,'b.')
+ax2.set_title('SDSS082346.00+201557.13')
+#ax2.plt.grid(True)
+ax2.set_ylabel('Normalized flux')
+ax3.plot(ftimes, fbestRpRsarray,'r')
+ax3.plot(ftimes, ffluxes,'b.')
+ax3.set_title('SDSS160401.31+083109.01')
+ax3.set_xlabel('Time (Julian Date)')
+#ax3.plt.grid(True)
+plt.show()"""
+#binary=plt.plot(dtimes, dbestRpRsarray,'r',label="Size of Potential Planet")
+#target1=plt.plot
+plt.subplot(3,1,1)
+rawflux=plt.plot(ftimes, ffluxes,'c.',label="Light Curve")
+psize=plt.plot(ftimes, fbestRpRsarray,'r',label="Size of Potential Planet")
+plt.ylabel('Normalized Flux')
+plt.xlabel('Time (Julian Date)')
+plt.legend(shadow=True)
+plt.title('SDSS 160401.31+083109.01' )
+plt.grid()
+plt.show
