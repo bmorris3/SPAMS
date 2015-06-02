@@ -2,9 +2,14 @@ import numpy as np
 from matplotlib import pyplot as plt
 from astropy.io import fits
 import sys
+import os
+from glob import glob
 
 # Open image from command line argument
-path = sys.argv[1]
+#path = sys.argv[1]
+
+path = sorted(glob('*.fits'), key=os.path.getmtime)[-1]
+print("Opening: {0}".format(path))
 img = fits.open(path)[0].data
 
 def format_coord(x, y):
