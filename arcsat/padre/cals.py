@@ -29,22 +29,37 @@ def master_dark(dark_images_paths, exp_same_as_image_at_path):
     median_dark : `~numpy.ndarray`
         Pixelwise median of all satisfactory darks
     """
-    exposure_length = fits.getheader(exp_same_as_image_at_path)['EXPTIME']
+    ref_header = fits.getheader(exp_same_as_image_at_path)
+    ref_exposure_length = ref_header['EXPTIME']
+    ref_temp = ref_header['SET-TEMP']
 
-    first_header = fits.getheader(dark_images_paths[0])
-    rows, cols = first_header['NAXIS1'], first_header['NAXIS2']
-    
-    darks_correct_exptime = [dark_path for dark_path in dark_images_paths
-                             if fits.getheader(dark_path)['EXPTIME'] == exposure_length]
-        
+    last_header = fits.getheader(dark_images_paths[-1])
+    rows, cols = last_header['NAXIS1'], last_header['NAXIS2']
+
+    exposure_lengths = [fits.getheader(dark_path)['EXPTIME']
+                        for dark_path in dark_images_paths]
+    set_temps = [fits.getheader(dark_path).get('SET-TEMP', 100)
+                 for dark_path in dark_images_paths]                            
+                            
+    darks_correct_exptime = [dark_path for dark_path, exp_len, set_temp in
+                             zip(dark_images_paths, exposure_lengths, set_temps)
+                             if exp_len == ref_exposure_length and set_temp == ref_temp]
+
+    if len(darks_correct_exptime) == 0:
+        raise ValueError("No darks with proper exposure length found. Needed "
+                         "duration {0} s and temp {1} C, got durations {2} s " 
+                         "and temp {3}".format(ref_exposure_length, ref_temp,
+                                               sorted(set(exposure_lengths)), 
+                                               sorted(set(set_temps))))
+
     darks_cube = np.zeros((rows, cols, len(darks_correct_exptime)))
     for i, dark_path in enumerate(darks_correct_exptime):
         darks_cube[:, :, i] = fits.getdata(dark_path)
-    
     median_dark = np.median(darks_cube, axis=2)
+
     return median_dark
 
-def master_flat(flat_images_paths, dark_images_paths):
+def master_flat(flat_images_paths, dark_images_paths=None, master_flat_dark=None):
     """
     Median-combine flats from list ``flat_images_paths`` after dark correcting
     images with the same exposure length.
@@ -54,8 +69,11 @@ def master_flat(flat_images_paths, dark_images_paths):
     flat_images_paths : list
         Paths to flat field images    
     
-    dark_images_paths : list
+    dark_images_paths : list (optional)
         Paths to dark frames
+        
+    master_flat_dark : `~numpy.ndarray` (optional)
+        Master dark frame of same exposure length as flats
         
     Returns
     -------
@@ -63,7 +81,10 @@ def master_flat(flat_images_paths, dark_images_paths):
         Flat field (normalized)
     """
     # Get dark frame for flats
-    flat_dark = master_dark(dark_images_paths, flat_images_paths[0])    
+    if master_flat_dark is None:
+        flat_dark = master_dark(dark_images_paths, flat_images_paths[-1])
+    else:
+        flat_dark = master_flat_dark
 
     first_header = fits.getheader(flat_images_paths[0])
     rows, cols = first_header['NAXIS1'], first_header['NAXIS2']

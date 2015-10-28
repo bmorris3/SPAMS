@@ -2,12 +2,6 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
-#from glob import glob
-#from astropy.time import Time
-#from scipy import optimize
-#from astropy import wcs
-#import ephem
-
 import os
 
 import astropy.units as u
@@ -15,6 +9,7 @@ from astropy.io import fits
 from astropy.time import Time
 from astropy import wcs
 from astropy.coordinates import Angle
+from astropy.utils.console import ProgressBar
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -26,6 +21,7 @@ from .photometry import phot, track_smooth
 from .lightcurve import LightCurve
 
 __all__ = ["Observation"]
+
 
 class Observation(object):
     """
@@ -69,7 +65,8 @@ class Observation(object):
         if not os.path.exists(self.output_dir):
             os.mkdir(self.output_dir)
         
-    def get_calibration_frames(self, force=False):
+    def get_calibration_frames(self, force=False, master_flat_path=None,
+                               master_dark_path=None, master_dark_scale_factor=1):
         """
         Get the master flat field, master dark frame.
         
@@ -78,25 +75,42 @@ class Observation(object):
         force : bool
             Load existing master calibration frames if those files exist or
             ``force``==`False`, otherwise calculate calibration frames.
+
+        master_flat_path : string or `None` (optional)
+            Path to the master flat you'd like to use. If `None`, generate a
+            master flat.
+
+        master_dark_path : string or `None` (optional)
+            Path to the master dark you'd like to use. If `None`, generate a
+            master dark.
+
+        master_dark_scale_factor : float
+            Scale the master_dark frame by this factor. If, for example, you're
+            using another target's master dark which had a different exposure
+            length, you can set ``master_dark_scale_factor`` to the ratio of
+            exposure times to scale the fluxes appropriately
         """
-        master_flat_path = os.path.join(self.output_dir, 'masterflat.fits')
-        master_dark_path = os.path.join(self.output_dir, 'masterdark.fits')
-        
+        if master_flat_path is None:
+            master_flat_path = os.path.join(self.output_dir, 'masterflat.fits')
+
+        if master_dark_path is None:
+            master_dark_path = os.path.join(self.output_dir, 'masterdark.fits')
+
         if not os.path.exists(master_dark_path) or force:
-            master_dark = calculate_master_dark(self.dark_paths, 
-                                                self.data_image_paths[0])
+            master_dark = calculate_master_dark(self.dark_paths,
+                                                self.data_image_paths[-1])
             fits.writeto(master_dark_path, master_dark, clobber=True)
-        else: 
+        else:
             master_dark = fits.getdata(master_dark_path)
-        
+
         if not os.path.exists(master_flat_path) or force:
-            master_flat = calculate_master_flat(self.flat_paths, 
+            master_flat = calculate_master_flat(self.flat_paths,
                                                 self.dark_paths)
             fits.writeto(master_flat_path, master_flat, clobber=True)
-        else: 
+        else:
             master_flat = fits.getdata(master_flat_path)
-        
-        self.master_dark = master_dark
+
+        self.master_dark = master_dark*master_dark_scale_factor
         self.master_flat = master_flat
 
     def parse_regions_file(self):
@@ -111,11 +125,38 @@ class Observation(object):
             if line.startswith('circle'):
                 y_center, x_center = line.split('(')[1].split(')')[0].split(',')[:2]
                 self.initial_centroids.append([y_center, x_center])
-        
-    def calculate_photometry(self, aperture_radii):
+
+    def generate_calibrated_images(self, output_dir, output_suffix='corrected'):
+        """
+        Dark subtract and flat field all data images, save them to `output_dir`.
+
+        This is useful for producing images that can be passed to astrometry.net
+        """
+        n_images = len(self.data_image_paths)
+        print("Generating calibrated images...")
+        with ProgressBar(n_images) as bar:
+            for i, image_path in enumerate(self.data_image_paths):
+                bar.update(i)
+                image_header = fits.getheader(image_path)
+                image_data = ((fits.getdata(image_path) - self.master_dark) /
+                              self.master_flat)
+
+                # TODO: Should this line be in our out?
+                #image_data[image_data < 0] = np.median(image_data)
+
+                file_name = image_path.split(os.sep)[-1].split('.fits')[0]
+                fits.writeto(os.path.join(output_dir,
+                                          file_name+output_suffix+'.fits'),
+                             image_data, clobber=True, header=image_header)
+
+    def calculate_photometry(self, aperture_radii, calibrated=True,
+                             track_plots=False):
         """
         Calculate photometry for all ``aperture_radii``.
         """
+        if self.initial_centroids is None:
+            self.parse_regions_file()
+
         n_images = len(self.data_image_paths)
         n_comparison_stars = len(self.initial_centroids)
         n_aperture_radii = len(aperture_radii)
@@ -129,76 +170,87 @@ class Observation(object):
         means = np.zeros(n_images)
         medians = np.zeros(n_images)
         
-        trackplots = False#True
+        trackplots = track_plots
         
         # Loop over images
-        for i, image_path in enumerate(self.data_image_paths):
-            print("{0} of {1}".format(i+1, n_images))
-            image_header = fits.getheader(image_path)
-            image_data = ((fits.getdata(image_path) - self.master_dark) / 
-                          self.master_flat)
-            exp_times[i] = image_header['EXPTIME']*u.s
-            jd_start_exposure = Time(image_header['JD'], format='jd')
-            jd_mid_exposure = (jd_start_exposure + 0.5*exp_times[i]).jd
-            times[i] = jd_mid_exposure
-            means[i] = np.mean(image_data)
-            medians[i] = np.median(image_data)
-            airmass[i] = image_header['AIRMASS']
-            hdulist = fits.open(image_path)
-            w = wcs.WCS(hdulist[0].header, hdulist)
-            
-            # Loop over aperture radii
-            for ap, apertureradius in enumerate(aperture_radii):
+        print("Calculating photometry...")
+        with ProgressBar(n_images) as bar:
+            for i, image_path in enumerate(self.data_image_paths):
+                bar.update(i)
+                image_header = fits.getheader(image_path)
+                if not calibrated:
+                    image_data = ((fits.getdata(image_path) - self.master_dark) /
+                                  self.master_flat)
+                else:
+                    image_data = fits.getdata(image_path)
+                exp_times[i] = image_header['EXPTIME']*u.s
+                jd_start_exposure = Time(image_header['JD'], format='jd')
+                jd_mid_exposure = (jd_start_exposure + 0.5*exp_times[i]).jd
+                times[i] = jd_mid_exposure
+                means[i] = np.mean(image_data)
+                medians[i] = np.median(image_data)
+                airmass[i] = image_header['AIRMASS']
+                hdulist = fits.open(image_path)
+                w = wcs.WCS(hdulist[0].header, hdulist)
 
-                zoomfactor = 15#25#15#25      ##zoom=15, smooth=3.5
-                smoothconst = 3.5# 2.5
-            
-                for j in range(n_comparison_stars):
-                    if ':' in self.initial_centroids[j][0]:
-                            RA = Angle(self.initial_centroids[j][0], 
-                                       unit=u.hourangle)
-                            Dec = Angle(self.initial_centroids[j][1], 
-                                        unit=u.deg)
-                            init_x, init_y = w.wcs_world2pix(RA.degree, 
-                                                             Dec.degree,
-                                                             0)
-                    elif i == 0:
+                # Loop over aperture radii
+                for ap, apertureradius in enumerate(aperture_radii):
+
+                    zoomfactor = 20#25#15#25      ##zoom=15, smooth=3.5
+                    smoothconst = 3.# 2.5
+
+                    for j in range(n_comparison_stars):
                         # If coordinates stored in sexigesimal notation, use WCS
                         # to find the target, otherwise use pixel positions.
+                        if ':' in self.initial_centroids[j][0]:
+                                RA = Angle(self.initial_centroids[j][0],
+                                           unit=u.hourangle)
+                                Dec = Angle(self.initial_centroids[j][1],
+                                            unit=u.deg)
+                                init_x, init_y = w.wcs_world2pix(RA.degree,
+                                                                 Dec.degree,
+                                                                 0)
+                        elif i == 0:
+                            init_x = self.initial_centroids[j][0]
+                            init_y = self.initial_centroids[j][1]
+                        else:
+                            init_x = xcentroids[i-1, j]
+                            init_y = ycentroids[i-1, j]
 
-                        init_x = self.initial_centroids[j][0]
-                        init_y = self.initial_centroids[j][1]
-                    else:
-                        init_x = xcentroids[i-1, j]
-                        init_y = ycentroids[i-1, j]
-                       
-                    if trackplots:
-                        fig = plt.figure(num=None, figsize=(18, 3), facecolor='w', edgecolor='k')
-                        fig.subplots_adjust(wspace=0.5)
-                        subplotsDimensions = 140
-                        photSubplotsOffset = 3
-                        statusSubplotOffset = 6
-                        plottingThings = [fig,subplotsDimensions,photSubplotsOffset]
-                    else: 
-                        plottingThings = False
+                        if trackplots:
+                            fig = plt.figure(num=None, figsize=(18, 3), facecolor='w', edgecolor='k')
+                            fig.subplots_adjust(wspace=0.5)
+                            subplotsDimensions = 140
+                            photSubplotsOffset = 3
+                            statusSubplotOffset = 6
+                            plottingThings = [fig,subplotsDimensions,photSubplotsOffset]
+                        else:
+                            plottingThings = False
+                        try:
+                            [xCenter,yCenter,averageRadius, _] = track_smooth(image_data,init_y, init_x, \
+                                smoothconst, plottingThings, preCropped=False, zoom=zoomfactor, plots=trackplots)
+                            flux, error, photFlags, _ = phot(image_data, xCenter, yCenter,
+                                                                            apertureradius,
+                                                                            plottingThings,
+                                                                            ccdGain=1.0,
+                                                                            plots=trackplots,\
+                    #                annulusOuterRadiusFactor=4.0, annulusInnerRadiusFactor=1.5,\
+                                    annulusOuterRadiusFactor=3, annulusInnerRadiusFactor=1.5,\
+                                    sigmaclipping=True, returnsubtractedflux=True)
+                        except ValueError:
+                            no_value = np.nan
+                            flux = no_value
+                            error = no_value
+                            xCenter = no_value
+                            yCenter = no_value
+                            print('ValueError raised at {0}'.format(times[i]))
 
-                    [xCenter,yCenter,averageRadius, _] = track_smooth(image_data,init_y, init_x, \
-                        smoothconst, plottingThings, preCropped=False, zoom=zoomfactor, plots=trackplots)
-                    flux, error, photFlags, _ = phot(image_data, xCenter, yCenter,
-                                                                    apertureradius,
-                                                                    plottingThings,
-                                                                    ccdGain=1.0,
-                                                                    plots=trackplots,\
-            #                annulusOuterRadiusFactor=4.0, annulusInnerRadiusFactor=1.5,\
-                            annulusOuterRadiusFactor=2.5, annulusInnerRadiusFactor=1.1,\
-                            sigmaclipping=True, returnsubtractedflux=True)
-
-                    fluxes[i, j, ap] = flux
-                    errors[i, j, ap] = error
-                    xcentroids[i, j] = xCenter
-                    ycentroids[i, j] = yCenter
-                    if trackplots:
-                        plt.show()
+                        fluxes[i, j, ap] = flux
+                        errors[i, j, ap] = error
+                        xcentroids[i, j] = xCenter
+                        ycentroids[i, j] = yCenter
+                        if trackplots:
+                            plt.show()
 
         self.fluxes = fluxes
         self.errors = errors
@@ -248,13 +300,13 @@ class Observation(object):
                 comp_star_indices = np.arange(self.fluxes.shape[1])[comp_stars]
                 for i in comp_star_indices:
                     meanCompError += ((best_p[i-1]*self.fluxes[:, i, aperture_radius_index] /
-                                       np.sum(best_p[i-1]*self.fluxes[:, i, aperture_radius_index]))**2 *
+                                       np.nansum(best_p[i-1]*self.fluxes[:, i, aperture_radius_index]))**2 *
                                        (self.errors[:, i, aperture_radius_index] /
                                        self.fluxes[:, i, aperture_radius_index])**2)
                 meanCompError = meanComparisonStar*np.sqrt(meanCompError)
 
                 lc = self.fluxes[:, star_index, aperture_radius_index] / meanComparisonStar
-                lc /= np.median(lc)
+                lc /= np.nanmedian(lc)
                 lc_err = (lc*np.sqrt((self.errors[:, star_index, aperture_radius_index] /
                           self.fluxes[:, star_index, aperture_radius_index])**2 +
                           (meanCompError/meanComparisonStar)**2))
@@ -265,102 +317,16 @@ class Observation(object):
                                    star_index,
                                    self.aperture_radii[aperture_radius_index]))
 
+                # metadata = {}
+                # metadata_attrs = ['xcentroids', 'ycentroids', 'fluxes', 'errors']
+                # for attr in metadata_attrs:
+                #     metadata[attr] = getattr(self, attr)
                 light_curves.append(LightCurve(times=self.times, fluxes=lc,
-                                               errors=lc_err, name=lc_name))
+                                               errors=lc_err, name=lc_name,
+                                               raw_fluxes=self.fluxes,
+                                               raw_errors=self.errors,
+                                               xcentroids=self.xcentroids,
+                                               ycentroids=self.ycentroids))
         return light_curves
 
-    @property
-    def best_lc(self):
-        return 
-        
-    @property
-    def best_lc_err(self):
-        return
-##plt.plot(aperture_radii, stds)
-##np.savetxt('GD165lightcurve.txt',np.vstack([times, correctedlc]))
-#
-#
-#alltimes = np.copy(times)
-#goodpoints = np.abs(correctedlc - np.median(correctedlc)) < 0.4#*np.std(correctedlc)
-##times = times[goodpoints]
-##fluxes = fluxes[goodpoints]
-##correctedlc = correctedlc[goodpoints]
-##lc_err = lc_err[goodpoints]
-#
-### Taken from git/research/koi351/variableaperture.ipynb
-#oot = np.ones_like(times).astype(bool)
-#target = fluxes[:,0]
-#targetOOT = fluxes[oot,0]
-#compStars = fluxes[:,1:]
-#compStarsOOT = fluxes[oot,1:]
-#
-#numCompStars = np.shape(fluxes[:,1:])[1]
-#initP = np.zeros([numCompStars])+ 1./numCompStars
-#########################################################
-#
-#def errfunc(p,target):
-#    if all(p >=0.0): 
-#        return np.dot(p,compStarsOOT.T) - targetOOT ## Find only positive coefficients
-#
-##return np.dot(p,compStarsOOT.T) - target
-#bestFitP = optimize.leastsq(errfunc,initP[:],args=(targetOOT.astype(np.float64)),\
-#                            maxfev=10000000,epsfcn=np.finfo(np.float32).eps)[0]
-#print '\nDefault weight:',1./numCompStars
-#print 'Best fit regression coefficients:',bestFitP
-#
-##self.comparisonStarWeights = np.vstack([compStarKeys,bestFitP])
-#meanComparisonStar = np.dot(bestFitP,compStars.T)
-#
-#meanCompError = np.zeros_like(meanComparisonStar)
-#for i in range(1,len(fluxes[0,:])):
-#    meanCompError += (bestFitP[i-1]*fluxes[:,i]/np.sum(bestFitP[i-1]*fluxes[:,i]))**2 *(errors[:,i]/fluxes[:,i])**2
-#meanCompError = meanComparisonStar*np.sqrt(meanCompError)
-#
-#lc = fluxes[:,0]/meanComparisonStar
-#lc /= np.median(lc)
-#lc_err = lc*np.sqrt((errors[:,0]/fluxes[:,0])**2 + (meanCompError/meanComparisonStar)**2)
-#reducedchi2 = np.sum(((lc-np.ones_like(lc))/lc_err)**2)/(len(lc) - 1)
-#
-#goodtimes = times - int(np.min(times))
-#condition = (np.abs(lc - np.median(lc)) < 1.5*np.std(lc))*((goodtimes > 3) + (goodtimes < 2.5))
-#sigmacliplc = lc[condition]
-#sigmacliplc_err = lc_err[condition]
-#sigmaclipstd = np.std(lc[condition])
-#sigmacliptimes = goodtimes[condition]
-#
-#fig, ax = plt.subplots(figsize=(12,12))
-##clcmean = np.mean(correctedlc)
-##ax.plot(times, lc,'.')#, yerr=lc_err, fmt='.')
-##import matplotlib
-##matplotlib.rcParams['font.size'] = 15
-#minint = int(np.min(times))
-#times_offset = times - minint
-#ax.errorbar(sigmacliptimes, sigmacliplc, yerr=sigmacliplc_err, fmt='.', color='k')
-#ax.set_xlabel('JD - %d' % minint)
-#ax.set_ylabel('Flux')
-#ax.axhline(1,ls='--',color='k')
-#ax.set_title('WD 2218+706: $\chi^2'+(' = %.3f' % reducedchi2)+r',\sigma = '+('%.3f$' % sigmaclipstd))
-##fig.savefig('plots/WD2218+706_lc.pdf')
-##ax.set_ylim([0.8,1.2])
-##plt.show()
-#np.savetxt('../WD2218+706lightcurve.txt', [sigmacliptimes, sigmacliplc, sigmacliplc_err])
-#
-#difftimes = np.diff(times)
-#bigjumps = np.abs(difftimes - np.median(difftimes)) > 2*np.std(difftimes)
-#bigjumpinds = np.arange(len(difftimes))[bigjumps]
-#bigjumpinds = np.concatenate([[0],bigjumpinds,[len(times)]])
-##fig, ax = plt.subplots(2, 2, figsize=(14,10))
-#fig = plt.figure(figsize=(14,10))
-#for i in range(len(bigjumpinds)-1):
-#    ax = fig.add_subplot(2,3,i+1)
-#    plttimes = times[1+bigjumpinds[i]:bigjumpinds[i+1]]
-#    minint = int(np.min(plttimes))
-#    plttimes = plttimes - minint
-#    pltlc = lc[1+bigjumpinds[i]:bigjumpinds[i+1]]
-#    pltlc_err = lc_err[1+bigjumpinds[i]:bigjumpinds[i+1]]
-#    ax.errorbar(plttimes, pltlc, yerr=pltlc_err, fmt='k.')
-#    ax.set_xlabel('JD - %d' % minint)
-#    ax.set_ylabel('Flux')
-#fig.tight_layout()
-#plt.show()
 

@@ -7,6 +7,8 @@ import astropy.units as u
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+from scipy import optimize
 
 __all__ = ['LightCurve', 'split_light_curve_at_gaps', 
            'concatenate_light_curves']
@@ -16,7 +18,8 @@ class LightCurve(object):
     Container object for light curves
     """
     def __init__(self, times=None, fluxes=None, errors=None, name=None,
-                 meta=None):
+                 meta=None, raw_fluxes=None, raw_errors=None, xcentroids=None,
+                 ycentroids=None, weights=None):
 
         if isinstance(times[0], Time) and isinstance(times, np.ndarray):
             times = Time(times)
@@ -27,6 +30,13 @@ class LightCurve(object):
         self.fluxes = fluxes
         self.errors = errors
         self.name = name
+        self.meta = meta
+        self.raw_fluxes = raw_fluxes
+        self.raw_errors = raw_errors
+        self.xcentroids = xcentroids
+        self.ycentroids = ycentroids
+        self.weights = weights
+        self.cached_light_curves = {}
         self.meta = meta
 
     def plot(self, ax=None, show=True,
@@ -43,9 +53,44 @@ class LightCurve(object):
         if show:
             plt.show()
 
+    def megaplot(self, show=True,
+             plot_kwargs={'color':'b', 'marker':'o', 'lw':0}):
+        """
+        Plot light curve and other data
+        """
+        plt.figure(figsize=(15, 15))
+        gs = GridSpec(3, 3)
+        ax_lc = plt.subplot(gs[0, :])
+        ax_rawflux = plt.subplot(gs[1, :], sharex=ax_lc)
+        ax_centroids = plt.subplot(gs[2, 0])
+        ax_x = plt.subplot(gs[2, 1])
+        ax_y = plt.subplot(gs[2, 2])
+
+        ax_lc.plot(self.times.jd, self.fluxes, **plot_kwargs)
+        ax_lc.set(ylabel='Flux', title=self.name)
+
+        ax_rawflux.plot(self.times.jd, self.raw_fluxes[:, 1:, 0])
+        ax_rawflux.plot(self.times.jd, self.raw_fluxes[:, 0, 0], 'k.')
+        ax_rawflux.set(xlabel='Time', ylabel='Flux')
+
+        ax_centroids.plot(self.xcentroids[:, 1:], self.ycentroids[:, 1:], '.')
+        ax_centroids.plot(self.xcentroids[:, 0], self.ycentroids[:, 0], 'ks')
+        ax_centroids.set(xlabel='x', ylabel='y')
+
+        ax_x.plot(self.times.jd, self.xcentroids[:, 1:])
+        ax_x.plot(self.times.jd, self.xcentroids[:, 0], 'k.')
+        ax_x.set(xlabel='Time', ylabel='x')
+
+        ax_y.plot(self.times.jd, self.ycentroids[:, 1:])
+        ax_y.plot(self.times.jd, self.ycentroids[:, 0], 'k.')
+        ax_y.set(xlabel='Time', ylabel='y')
+
+        if show:
+            plt.show()
+
     def __repr__(self):
         """Repr string should be 'LightCurve: name' """
-        return "{0}: {1}".format(self.__class__.__name__, self.name)
+        return "<{0}: {1}>".format(self.__class__.__name__, self.name)
 
     @property
     def times_jd(self):
@@ -55,27 +100,40 @@ class LightCurve(object):
         """
         Save times, fluxes, errors to ``path``.txt
         """
-        if not path.endswith('.txt'):
-            path += '.txt'
+        if not path.endswith('.npz'):
+            path += '.npz'
         
         if not os.path.exists(path) or overwrite:
-            attrs = ['times_jd', 'fluxes', 'errors']
-            output_array = np.zeros((len(self.fluxes), len(attrs)), dtype=float)
-            for i, attr in enumerate(attrs):
-                output_array[:, i] = getattr(self, attr)
-            np.savetxt(os.path.join(path), output_array)
+            # attrs = ['times_jd', 'fluxes', 'errors']
+            # output_array = np.zeros((len(self.fluxes), len(attrs)), dtype=float)
+            # for i, attr in enumerate(attrs):
+            #     output_array[:, i] = getattr(self, attr)
+            # np.savetxt(os.path.join(path), output_array)
+            save_attrs = ['times_jd', 'fluxes', 'errors', 'raw_fluxes',
+                          'raw_errors', 'xcentroids', 'ycentroids']
+            save_dict = {}
+            for attr in save_attrs:
+                save_dict[attr] = getattr(self, attr)
+            np.savez_compressed(os.path.join(path), **save_dict)
 
     @classmethod
     def load_from(cls, path):
         """
         Load times, fluxes, errors to ``path``.txt
         """
-        if not path.endswith('.txt'):
-            path += '.txt'
-        
-        times, fluxes, errors = np.loadtxt(os.path.join(path), unpack=True)
-        name = path.split(os.sep)[-1].split('.')[0]
-        return cls(times=times, fluxes=fluxes, errors=errors, name=name)
+        if not path.endswith('.npz'):
+            path += '.npz'
+
+        in_file = np.load(os.path.join(path))
+
+        # times, fluxes, errors = np.loadtxt(os.path.join(path), unpack=True)
+        # name = path.split(os.sep)[-1].split('.')[0]
+        # return cls(times=times, fluxes=fluxes, errors=errors, name=name)
+        return cls(times=in_file['times_jd'], fluxes=in_file['fluxes'],
+                   errors=in_file['errors'], raw_fluxes=in_file['raw_fluxes'],
+                   raw_errors=in_file['raw_errors'],
+                   xcentroids=in_file['xcentroids'],
+                   ycentroids=in_file['ycentroids'])
 
     def fit_linear_baseline(self, plots=False, sigma=5):
         """
@@ -118,6 +176,71 @@ class LightCurve(object):
             linear_baseline_fit = np.polyval(linear_baseline, self.times.jd)
             self.fluxes =  self.fluxes/linear_baseline_fit
             self.errors = self.errors/linear_baseline_fit
+
+    # def generate_light_curve(self, star_index=0):
+    #
+    #     for aperture_radius_index in range(self.fluxes.shape[2]):
+    #         light_curve_key = (star_index, aperture_radius_index)
+    #
+    #         if light_curve_key in self.cached_light_curves:
+    #             return self.cached_light_curves[light_curve_key]
+    #         else:
+    #             comp_stars = np.arange(self.fluxes.shape[1]) != star_index
+    #             target_fluxes = self.fluxes[:, star_index, aperture_radius_index]
+    #             comp_star_fluxes = self.fluxes[:, comp_stars, aperture_radius_index]
+    #
+    #             n_comp_stars = comp_star_fluxes.shape[1]
+    #             initP = np.zeros([n_comp_stars])+ 1./n_comp_stars
+    #             ########################################################
+    #
+    #             def errfunc(p,target):
+    #                 if all(p >=0.0):
+    #                     return np.dot(p, comp_star_fluxes.T) - target_fluxes ## Find only positive coefficients
+    #
+    #             #return np.dot(p,compStarsOOT.T) - target
+    #             best_p = optimize.leastsq(errfunc, initP[:],
+    #                                       args=(target_fluxes.astype(np.float64)),
+    #                                             maxfev=10000000,
+    #                                             epsfcn=np.finfo(np.float32).eps)[0]
+    #             #print '\nDefault weight:',1./numCompStars
+    #             #print 'Best fit regression coefficients:',bestFitP
+    #
+    #             #self.comparisonStarWeights = np.vstack([compStarKeys,bestFitP])
+    #             meanComparisonStar = np.dot(best_p, comp_star_fluxes.T)
+    #
+    #             meanCompError = np.zeros_like(meanComparisonStar)
+    #             comp_star_indices = np.arange(self.fluxes.shape[1])[comp_stars]
+    #             for i in comp_star_indices:
+    #                 meanCompError += ((best_p[i-1]*self.fluxes[:, i, aperture_radius_index] /
+    #                                    np.sum(best_p[i-1]*self.fluxes[:, i, aperture_radius_index]))**2 *
+    #                                    (self.errors[:, i, aperture_radius_index] /
+    #                                    self.fluxes[:, i, aperture_radius_index])**2)
+    #             meanCompError = meanComparisonStar*np.sqrt(meanCompError)
+    #
+    #             lc = self.fluxes[:, star_index, aperture_radius_index] / meanComparisonStar
+    #             lc /= np.median(lc)
+    #             lc_err = (lc*np.sqrt((self.errors[:, star_index, aperture_radius_index] /
+    #                       self.fluxes[:, star_index, aperture_radius_index])**2 +
+    #                       (meanCompError/meanComparisonStar)**2))
+    #             self.cached_light_curves[light_curve_key] = (lc, lc_err)
+    #
+    #             lc_name = ("{0}\n target={1}, aprad={2}"
+    #                        .format(self.target_name,
+    #                                star_index,
+    #                                self.aperture_radii[aperture_radius_index]))
+    #
+    #             # metadata = {}
+    #             # metadata_attrs = ['xcentroids', 'ycentroids', 'fluxes', 'errors']
+    #             # for attr in metadata_attrs:
+    #             #     metadata[attr] = getattr(self, attr)
+    #             return self.__class__.__init__(times=self.times, fluxes=lc,
+    #                                            errors=lc_err, name=lc_name,
+    #                                            raw_fluxes=self.fluxes,
+    #                                            raw_errors=self.errors,
+    #                                            xcentroids=self.xcentroids,
+    #                                            ycentroids=self.ycentroids,
+    #                                            weights=best_p)
+
 
 def split_light_curve_at_gaps(light_curve, gap_median_factor=3):
     """
