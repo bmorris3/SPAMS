@@ -5,4 +5,4 @@ Volatile collection of tools for the SPAMS [Pre-MAP](http://www.astro.washington
 
 **Don't forget to update the [Research Journal](https://github.com/bmorris3/SPAMS/wiki/Research-Journal)!**
 
-**Team**: Brett Morris, Ada Beale, Doug Branton
+**Team**: PI Brett Morris, Ada Beale, Doug Branton, Katie Reil, Aislynn Wallach, Andrew Yetter
