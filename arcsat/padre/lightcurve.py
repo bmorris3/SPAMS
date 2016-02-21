@@ -50,6 +50,10 @@ class LightCurve(object):
         ax.plot(self.times.jd, self.fluxes, **plot_kwargs)
         ax.set(xlabel='Time', ylabel='Flux', title=self.name)
 
+        def format_coord(x, y):
+            return 'x=%1.8f, y=%1.8f' % (x, y)
+        ax.format_coord = format_coord
+        
         if show:
             plt.show()
 
@@ -117,7 +121,7 @@ class LightCurve(object):
             np.savez_compressed(os.path.join(path), **save_dict)
 
     @classmethod
-    def load_from(cls, path):
+    def load_from(cls, path, name=None):
         """
         Load times, fluxes, errors to ``path``.txt
         """
@@ -133,7 +137,7 @@ class LightCurve(object):
                    errors=in_file['errors'], raw_fluxes=in_file['raw_fluxes'],
                    raw_errors=in_file['raw_errors'],
                    xcentroids=in_file['xcentroids'],
-                   ycentroids=in_file['ycentroids'])
+                   ycentroids=in_file['ycentroids'], name=name)
 
     def fit_linear_baseline(self, plots=False, sigma=5):
         """
