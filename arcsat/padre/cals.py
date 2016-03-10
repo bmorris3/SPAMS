@@ -82,12 +82,20 @@ def master_flat(flat_images_paths, dark_images_paths=None, master_flat_dark=None
     """
     # Get dark frame for flats
     if master_flat_dark is None:
+        set_temps = [fits.getheader(dark_path).get('SET-TEMP', 100)
+                     for dark_path in dark_images_paths]
         flat_dark = master_dark(dark_images_paths, flat_images_paths[-1])
     else:
         flat_dark = master_flat_dark
 
     first_header = fits.getheader(flat_images_paths[0])
     rows, cols = first_header['NAXIS1'], first_header['NAXIS2']
+
+    if not np.all(np.array(set_temps) == first_header['SET-TEMP']):
+        raise ValueError("Set temperature expected: {0}, got {1}".format(first_header['SET-TEMP'],
+                                                                         set(set_temps)))
+
+
 
     flats_cube = np.zeros((rows, cols, len(flat_images_paths)))
     for i, flat_path in enumerate(flat_images_paths):

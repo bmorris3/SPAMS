@@ -90,11 +90,14 @@ class Observation(object):
             length, you can set ``master_dark_scale_factor`` to the ratio of
             exposure times to scale the fluxes appropriately
         """
+        print(master_flat_path)
         if master_flat_path is None:
             master_flat_path = os.path.join(self.output_dir, 'masterflat.fits')
 
         if master_dark_path is None:
             master_dark_path = os.path.join(self.output_dir, 'masterdark.fits')
+
+        print(master_flat_path, 'exists={0}'.format(os.path.exists(master_flat_path)))
 
         if not os.path.exists(master_dark_path) or force:
             master_dark = calculate_master_dark(self.dark_paths,
@@ -104,6 +107,7 @@ class Observation(object):
             master_dark = fits.getdata(master_dark_path)
 
         if not os.path.exists(master_flat_path) or force:
+            print('make master flat')
             master_flat = calculate_master_flat(self.flat_paths,
                                                 self.dark_paths)
             fits.writeto(master_flat_path, master_flat, clobber=True)
@@ -196,8 +200,8 @@ class Observation(object):
                 # Loop over aperture radii
                 for ap, apertureradius in enumerate(aperture_radii):
 
-                    zoomfactor = 20#25#15#25      ##zoom=15, smooth=3.5
-                    smoothconst = 3.# 2.5
+                    zoomfactor = 10#20
+                    smoothconst = 3#2.5
 
                     for j in range(n_comparison_stars):
                         # If coordinates stored in sexigesimal notation, use WCS
@@ -237,7 +241,7 @@ class Observation(object):
                     #                annulusOuterRadiusFactor=4.0, annulusInnerRadiusFactor=1.5,\
                                     annulusOuterRadiusFactor=3, annulusInnerRadiusFactor=1.5,\
                                     sigmaclipping=True, returnsubtractedflux=True)
-                        except ValueError:
+                        except (ValueError, IndexError):
                             no_value = np.nan
                             flux = no_value
                             error = no_value

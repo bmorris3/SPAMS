@@ -247,8 +247,9 @@ def track_smooth(image, est_x, est_y, smoothingConst, plottingThings, preCropped
         axisA_orig = np.sum(target,axis=0)   ## Take the sums of all values in each column,
         axisB_orig = np.sum(target,axis=1)   ## then repeat for each row
     
-    target = ndimage.gaussian_filter(target, sigma=smoothingConst,order=0)
-    
+    target = np.array(ndimage.gaussian_filter(target, sigma=smoothingConst,order=0),
+                      dtype=np.float64)
+
     ## Sum columns
     axisA = np.sum(target,axis=0)   ## Take the sums of all values in each column,
     axisB = np.sum(target,axis=1)   ## then repeat for each row
@@ -260,7 +261,7 @@ def track_smooth(image, est_x, est_y, smoothingConst, plottingThings, preCropped
     lenaxisADeriv_2 = lenaxisADeriv/2
     lenaxisBDeriv = len(axisBDeriv)
     lenaxisBDeriv_2 = lenaxisBDeriv/2
-    
+
     derivMinAind = np.where(axisADeriv == min(axisADeriv[lenaxisADeriv_2:lenaxisADeriv]))[0][0] ## Minimum in the derivative
     derivMinBind = np.where(axisBDeriv == min(axisBDeriv[lenaxisBDeriv_2:lenaxisBDeriv]))[0][0] ## of the intensity plot
 
