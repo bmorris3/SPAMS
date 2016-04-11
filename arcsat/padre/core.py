@@ -153,7 +153,7 @@ class Observation(object):
                                           file_name+output_suffix+'.fits'),
                              image_data, clobber=True, header=image_header)
 
-    def calculate_photometry(self, aperture_radii, calibrated=True,
+    def calculate_photometry(self, aperture_radii, calibrated=False,
                              track_plots=False):
         """
         Calculate photometry for all ``aperture_radii``.
@@ -279,6 +279,7 @@ class Observation(object):
             else:
                 comp_stars = np.arange(self.fluxes.shape[1]) != star_index
                 target_fluxes = self.fluxes[:, star_index, aperture_radius_index]
+                target_errors = self.errors[:, star_index, aperture_radius_index]
                 comp_star_fluxes = self.fluxes[:, comp_stars, aperture_radius_index]
 
                 n_comp_stars = comp_star_fluxes.shape[1]
@@ -287,15 +288,17 @@ class Observation(object):
 
                 def errfunc(p,target):
                     if all(p >=0.0):
-                        return np.dot(p, comp_star_fluxes.T) - target_fluxes ## Find only positive coefficients
+                        return np.dot(p, comp_star_fluxes.T) - target_fluxes  ## Find only positive coefficients
 
-                #return np.dot(p,compStarsOOT.T) - target
+                # return np.dot(p,compStarsOOT.T) - target
+
+
                 best_p = optimize.leastsq(errfunc, initP[:],
                                           args=(target_fluxes.astype(np.float64)),
                                                 maxfev=10000000,
                                                 epsfcn=np.finfo(np.float32).eps)[0]
                 #print '\nDefault weight:',1./numCompStars
-                #print 'Best fit regression coefficients:',bestFitP
+                print('Best fit regression coefficients:', best_p)
 
                 #self.comparisonStarWeights = np.vstack([compStarKeys,bestFitP])
                 meanComparisonStar = np.dot(best_p, comp_star_fluxes.T)
